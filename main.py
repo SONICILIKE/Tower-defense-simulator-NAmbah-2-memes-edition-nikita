@@ -13,7 +13,7 @@ HEIGHT = 700
 FPS = 60
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Tower Defense Memes Edition")
+pygame.display.set_caption("Tower Defense")
 
 clock = pygame.time.Clock()
 
@@ -92,7 +92,6 @@ class Enemy:
 
         self.speed = 2
 
-        # HP
         self.max_hp = 100 + level * 60
 
         if boss:
@@ -105,7 +104,6 @@ class Enemy:
 
         self.hp = self.max_hp
 
-        # SIZE
         self.radius = 15
 
         if boss:
@@ -240,7 +238,6 @@ class Bullet:
             6
         )
 
-        # BULLET RADIUS
         pygame.draw.circle(
             screen,
             ORANGE,
@@ -299,6 +296,7 @@ class Tower:
 
         target = None
 
+        # атакует первого врага
         for enemy in enemies:
 
             if enemy.dead:
@@ -334,10 +332,33 @@ class Tower:
 
         pygame.draw.circle(
             screen,
+            (80, 80, 80),
+            (self.x, self.y),
+            self.range,
+            1
+        )
+
+        pygame.draw.circle(
+            screen,
+            BLACK,
+            (self.x, self.y),
+            24
+        )
+
+        pygame.draw.circle(
+            screen,
             color,
             (self.x, self.y),
             20
         )
+
+        lvl = font.render(
+            str(self.level),
+            True,
+            WHITE
+        )
+
+        screen.blit(lvl, (self.x - 6, self.y - 10))
 
         # HP BAR
         pygame.draw.rect(
@@ -375,19 +396,22 @@ class Game:
 
         self.wave = 0
 
-        self.spawn_timer = 0
-
         self.message = ""
 
         self.shop_open = False
 
-        # GLOBAL UPGRADES
+        self.wave_started = False
+
         self.damage_upgrade = 0
         self.hp_upgrade = 0
         self.range_upgrade = 0
         self.speed_upgrade = 0
 
-        self.boss_kills = 0
+    # =================================================
+
+    def get_upgrade_cost(self, level):
+
+        return (level + 1) * 100
 
     # =================================================
 
@@ -416,12 +440,10 @@ class Game:
 
     def place_tower(self, x, y):
 
-        # нельзя строить на дороге
         if self.is_on_path(x, y):
             self.message = "CANT BUILD ON PATH"
             return
 
-        # нельзя рядом с башнями
         for tower in self.towers:
 
             if math.hypot(
@@ -432,14 +454,12 @@ class Game:
                 self.message = "TOO CLOSE"
                 return
 
-        # нет денег
         if self.money < TOWER_COST:
             self.message = "NO MONEY"
             return
 
         tower = Tower(x, y)
 
-        # upgrades
         tower.damage += self.damage_upgrade * 20
 
         tower.max_hp += self.hp_upgrade * 30
@@ -460,7 +480,6 @@ class Game:
 
         level = min(self.wave, 10)
 
-        # NORMAL ENEMIES
         normal_count = 4 + self.wave
 
         for i in range(normal_count):
@@ -469,12 +488,10 @@ class Game:
                 Enemy(level)
             )
 
-        # BOSS
         self.enemies.append(
             Enemy(level, boss=True)
         )
 
-        # MEGA BOSS
         if self.wave % 5 == 0:
 
             self.enemies.append(
@@ -483,20 +500,28 @@ class Game:
 
     # =================================================
 
-    def update(self):
+    def start_wave(self):
 
-        # новая волна только когда врагов нет
         if len(self.enemies) == 0:
 
-            self.spawn_timer += 1
+            self.wave += 1
 
-            if self.spawn_timer >= 180:
+            self.spawn_wave()
 
-                self.wave += 1
+    # =================================================
 
-                self.spawn_wave()
+    def skip_wave(self):
 
-                self.spawn_timer = 0
+        self.enemies.clear()
+
+    # =================================================
+
+    def update(self):
+
+        # auto next wave
+        if len(self.enemies) == 0 and self.wave_started:
+
+            self.start_wave()
 
         # enemies
         for enemy in self.enemies:
@@ -504,7 +529,6 @@ class Game:
 
         # towers
         for tower in self.towers:
-
             tower.update(
                 self.enemies,
                 self.bullets
@@ -519,20 +543,16 @@ class Game:
 
             if enemy.dead:
 
-                reward = 5
+                reward = 10
 
-                if enemy.boss or enemy.mega:
+                if enemy.boss:
+                    reward = 50
 
-                    self.boss_kills += 1
-
-                    reward = min(
-                        self.boss_kills * 5,
-                        25
-                    )
+                if enemy.mega:
+                    reward = 100
 
                 self.money += reward
 
-        # remove dead
         self.enemies = [
             e for e in self.enemies
             if not e.dead
@@ -550,19 +570,36 @@ class Game:
         pygame.draw.rect(
             screen,
             (30, 30, 30),
-            (900, 0, 300, 300)
+            (900, 120, 280, 300)
         )
 
+        dmg_cost = self.get_upgrade_cost(self.damage_upgrade)
+        hp_cost = self.get_upgrade_cost(self.hp_upgrade)
+        range_cost = self.get_upgrade_cost(self.range_upgrade)
+        speed_cost = self.get_upgrade_cost(self.speed_upgrade)
+
         texts = [
-            f"1 DAMAGE {self.damage_upgrade}/5",
-            f"2 HP {self.hp_upgrade}/5",
-            f"3 RANGE {self.range_upgrade}/5",
-            f"4 SPEED {self.speed_upgrade}/5",
+
+            f"1 DAMAGE LVL {self.damage_upgrade}",
+            f"COST {dmg_cost}",
+
             "",
-            "PRESS 1-4"
+
+            f"2 HP LVL {self.hp_upgrade}",
+            f"COST {hp_cost}",
+
+            "",
+
+            f"3 RANGE LVL {self.range_upgrade}",
+            f"COST {range_cost}",
+
+            "",
+
+            f"4 SPEED LVL {self.speed_upgrade}",
+            f"COST {speed_cost}",
         ]
 
-        y = 40
+        y = 140
 
         for t in texts:
 
@@ -574,7 +611,7 @@ class Game:
 
             screen.blit(txt, (920, y))
 
-            y += 40
+            y += 25
 
     # =================================================
 
@@ -602,6 +639,36 @@ class Game:
         screen.blit(wave, (10, 40))
         screen.blit(towers, (10, 70))
 
+        # START BUTTON
+        pygame.draw.rect(
+            screen,
+            GREEN,
+            (900, 10, 120, 40)
+        )
+
+        txt = font.render(
+            "START",
+            True,
+            BLACK
+        )
+
+        screen.blit(txt, (930, 18))
+
+        # SKIP BUTTON
+        pygame.draw.rect(
+            screen,
+            ORANGE,
+            (900, 60, 120, 40)
+        )
+
+        txt2 = font.render(
+            "SKIP",
+            True,
+            BLACK
+        )
+
+        screen.blit(txt2, (940, 68))
+
         # SHOP BUTTON
         pygame.draw.rect(
             screen,
@@ -626,6 +693,42 @@ class Game:
 
         screen.blit(msg, (10, 110))
 
+        # TOWER INFO
+        mx, my = pygame.mouse.get_pos()
+
+        for tower in self.towers:
+
+            dist = math.hypot(
+                tower.x - mx,
+                tower.y - my
+            )
+
+            if dist < 30:
+
+                upgrade_cost = tower.level * 100
+
+                info = [
+                    f"LEVEL: {tower.level}",
+                    f"DAMAGE: {tower.damage}",
+                    f"RANGE: {tower.range}",
+                    f"UPGRADE: {upgrade_cost}$",
+                    "PRESS U"
+                ]
+
+                y = 150
+
+                for i in info:
+
+                    txt = font.render(
+                        i,
+                        True,
+                        WHITE
+                    )
+
+                    screen.blit(txt, (10, y))
+
+                    y += 25
+
         if self.shop_open:
             self.draw_shop()
 
@@ -637,7 +740,6 @@ class Game:
 
             clock.tick(FPS)
 
-            # EVENTS
             for event in pygame.event.get():
 
                 if event.type == pygame.QUIT:
@@ -648,8 +750,19 @@ class Game:
 
                     mx, my = pygame.mouse.get_pos()
 
-                    # SHOP BUTTON
-                    if 1040 <= mx <= 1160 and 10 <= my <= 50:
+                    # START
+                    if 900 <= mx <= 1020 and 10 <= my <= 50:
+
+                        self.wave_started = True
+                        self.start_wave()
+
+                    # SKIP
+                    elif 900 <= mx <= 1020 and 60 <= my <= 100:
+
+                        self.skip_wave()
+
+                    # SHOP
+                    elif 1040 <= mx <= 1160 and 10 <= my <= 50:
 
                         self.shop_open = not self.shop_open
 
@@ -674,34 +787,41 @@ class Game:
 
                             if dist < 30:
 
-                                if self.money >= 100:
+                                cost = tower.level * 100
+
+                                if self.money >= cost:
 
                                     tower.upgrade()
 
-                                    self.money -= 100
+                                    self.money -= cost
 
-                    # SHOP UPGRADES
+                    # shop upgrades
                     if self.shop_open:
 
-                        if event.key == pygame.K_1:
+                        upgrades = [
+                            ("damage_upgrade", pygame.K_1),
+                            ("hp_upgrade", pygame.K_2),
+                            ("range_upgrade", pygame.K_3),
+                            ("speed_upgrade", pygame.K_4)
+                        ]
 
-                            if self.damage_upgrade < 5:
-                                self.damage_upgrade += 1
+                        for attr, key in upgrades:
 
-                        if event.key == pygame.K_2:
+                            if event.key == key:
 
-                            if self.hp_upgrade < 5:
-                                self.hp_upgrade += 1
+                                lvl = getattr(self, attr)
 
-                        if event.key == pygame.K_3:
+                                cost = self.get_upgrade_cost(lvl)
 
-                            if self.range_upgrade < 5:
-                                self.range_upgrade += 1
+                                if self.money >= cost:
 
-                        if event.key == pygame.K_4:
+                                    setattr(
+                                        self,
+                                        attr,
+                                        lvl + 1
+                                    )
 
-                            if self.speed_upgrade < 5:
-                                self.speed_upgrade += 1
+                                    self.money -= cost
 
             # UPDATE
             self.update()
